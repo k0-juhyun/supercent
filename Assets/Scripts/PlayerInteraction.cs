@@ -95,9 +95,9 @@ public class PlayerInteraction : MonoBehaviour
 
                     // 빵 상태 변화 이벤트 호출
                     OnBreadStateChanged?.Invoke(_stackedBreads.Count > 0);
+                    _playerAnimator.SetTrigger("Stack_Idle");
                 });
 
-            _playerAnimator.SetTrigger("Stack_Idle");
 
             yield return new WaitUntil(() => isBreadAddedToStack);
             yield return new WaitForSeconds(0.1f);
