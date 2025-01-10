@@ -7,6 +7,7 @@ TagManager:
   - OvenPlane
   - Oven
   - Bread
+  - StallPlane
   layers:
   - Default
   - TransparentFX

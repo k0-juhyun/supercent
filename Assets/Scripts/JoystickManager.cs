@@ -4,33 +4,31 @@ using DG.Tweening;
 
 public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler
 {
-    public GameObject _joystickPrefab; // 조이스틱 프리팹
-    public GameObject _touchPointPrefab; // 터치 포인트 프리팹
-    public Animator _player; // 플레이어 애니메이터
-    public PlayerInteraction _playerInteraction; // 플레이어 상호작용 참조
+    public GameObject _joystickPrefab;
+    public GameObject _touchPointPrefab;
+    public Animator _player;
+    public PlayerInteraction _playerInteraction;
 
-    private GameObject _joystickInstance; // 현재 활성화된 조이스틱
-    private GameObject _touchPointInstance; // 현재 활성화된 터치 포인트
-    private RectTransform _joystickBase; // 조이스틱 Base
-    private RectTransform _joystickKnob; // 조이스틱 Knob
+    private GameObject _joystickInstance;
+    private GameObject _touchPointInstance;
+    private RectTransform _joystickBase;
+    private RectTransform _joystickKnob;
 
-    private string _currentAnimationState; // 현재 애니메이션 상태
-    public float _joystickRadius = 100f; // 조이스틱 반경
-    public float _knobMoveDuration = 0.2f; // Knob 이동 속도
-    private Vector2 _inputDirection; // 입력 방향
+    private string _currentAnimationState;
+    public float _joystickRadius = 100f;
+    public float _knobMoveDuration = 0.2f;
+    private Vector2 _inputDirection;
 
     public Vector2 InputDirection => _inputDirection;
 
     private void Start()
     {
-        // 빵 상태 변화 이벤트 구독
-        _playerInteraction.OnBreadStateChanged += UpdateIdleAnimation;
+        _playerInteraction.OnBreadStateChanged += HandleBreadStateChange;
     }
 
     private void OnDestroy()
     {
-        // 이벤트 구독 해제
-        _playerInteraction.OnBreadStateChanged -= UpdateIdleAnimation;
+        _playerInteraction.OnBreadStateChanged -= HandleBreadStateChange;
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -62,15 +60,8 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             Destroy(_joystickInstance);
 
         _joystickInstance = Instantiate(_joystickPrefab, transform);
-        _joystickBase = _joystickInstance.transform.Find("Base")?.GetComponent<RectTransform>();
-        _joystickKnob = _joystickBase.transform.Find("Knob")?.GetComponent<RectTransform>();
-
-        if (_joystickBase == null || _joystickKnob == null)
-        {
-            Debug.LogError("Base 또는 Knob을 찾을 수 없습니다.");
-            Destroy(_joystickInstance);
-            return;
-        }
+        _joystickBase = _joystickInstance.transform.Find("Base").GetComponent<RectTransform>();
+        _joystickKnob = _joystickBase.transform.Find("Knob").GetComponent<RectTransform>();
 
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             transform as RectTransform, screenPosition, eventCamera, out Vector2 localPoint);
@@ -102,29 +93,17 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     private void UpdateJoystick()
     {
-        if (_joystickBase == null || _joystickKnob == null || _touchPointInstance == null) return;
-
         Vector2 direction = _touchPointInstance.GetComponent<RectTransform>().anchoredPosition - _joystickBase.anchoredPosition;
         Vector2 clampedDirection = Vector2.ClampMagnitude(direction, _joystickRadius);
         _inputDirection = clampedDirection / _joystickRadius;
 
-        if (_joystickKnob != null)
-        {
-            _joystickKnob.DOAnchorPos(clampedDirection, _knobMoveDuration).SetEase(Ease.Linear);
-        }
+        _joystickKnob.DOAnchorPos(clampedDirection, _knobMoveDuration).SetEase(Ease.Linear);
     }
 
     private void DestroyJoystick()
     {
-        if (_joystickKnob != null)
-        {
-            DOTween.Kill(_joystickKnob);
-        }
-
         if (_joystickInstance != null)
-        {
             Destroy(_joystickInstance);
-        }
 
         _inputDirection = Vector2.zero;
     }
@@ -132,10 +111,7 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     private void DestroyTouchPoint()
     {
         if (_touchPointInstance != null)
-        {
-            DOTween.Kill(_touchPointInstance.GetComponent<RectTransform>());
             Destroy(_touchPointInstance);
-        }
     }
 
     private void UpdateMoveAnimation(bool isMoving)
@@ -150,7 +126,7 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         _player.SetTrigger(targetState);
     }
 
-    private void UpdateIdleAnimation(bool hasBread)
+    private void HandleBreadStateChange(bool hasBread)
     {
         string targetState = hasBread ? "Stack_Idle" : "Default_Idle";
 
