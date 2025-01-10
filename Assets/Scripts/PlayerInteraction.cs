@@ -13,7 +13,8 @@ public class PlayerInteraction : MonoBehaviour
     public Stack<GameObject> _stackedBreads = new Stack<GameObject>();
 
     private BreadFac _breadFac;
-    private bool _isOnOvenPlane = false;
+    private bool _isCollectingBreads = false; // 빵 수집 중인지 여부
+    private bool _isPlacingBreads = false; // 빵 배치 중인지 여부
 
     public event System.Action<bool> OnBreadStateChanged;
 
@@ -22,35 +23,22 @@ public class PlayerInteraction : MonoBehaviour
         _characterController = GetComponent<CharacterController>();
     }
 
-    private void OnTriggerEnter(Collider other)
+    private void OnTriggerStay(Collider other)
     {
-        if (other.CompareTag("OvenPlane"))
+        if (other.CompareTag("OvenPlane") && !_isCollectingBreads)
         {
-            _isOnOvenPlane = true;
             _breadFac = other.GetComponentInChildren<BreadFac>();
-
             if (_breadFac != null)
             {
                 StartCoroutine(CollectBreadFromFac());
             }
         }
-        else if (other.CompareTag("StallPlane"))
+        else if (other.CompareTag("StallPlane") && !_isPlacingBreads)
         {
-            if (IsStallFull(other.transform))
+            if (!IsStallFull(other.transform))
             {
-                Debug.LogWarning("Stall is full. Cannot place more bread.");
-                return; // Stall이 가득 찬 경우 배치 중단
+                StartCoroutine(PlaceBreadInStall(other.transform));
             }
-
-            StartCoroutine(PlaceBreadInStall(other.transform));
-        }
-    }
-
-    private void OnTriggerExit(Collider other)
-    {
-        if (other.CompareTag("OvenPlane"))
-        {
-            _isOnOvenPlane = false;
         }
     }
 
@@ -58,14 +46,24 @@ public class PlayerInteraction : MonoBehaviour
     {
         if (_breadFac == null) yield break;
 
+        _isCollectingBreads = true;
+
         int spaceLeft = _maxStackSize - _stackedBreads.Count;
-        if (spaceLeft <= 0) yield break;
+        if (spaceLeft <= 0)
+        {
+            _isCollectingBreads = false;
+            yield break;
+        }
 
         List<GameObject> breadsToCollect = _breadFac.GetBreadsFromFac(spaceLeft);
 
         foreach (GameObject bread in breadsToCollect)
         {
-            if (_stackedBreads.Count >= _maxStackSize) yield break;
+            if (_stackedBreads.Count >= _maxStackSize)
+            {
+                _isCollectingBreads = false;
+                yield break;
+            }
 
             Transform targetPosition = _stackPositions[_stackedBreads.Count];
             GameObject stackBread = targetPosition.GetChild(0).gameObject;
@@ -88,10 +86,14 @@ public class PlayerInteraction : MonoBehaviour
             yield return new WaitUntil(() => isBreadAddedToStack);
             yield return new WaitForSeconds(0.1f);
         }
+
+        _isCollectingBreads = false;
     }
 
     private IEnumerator PlaceBreadInStall(Transform stallPlane)
     {
+        _isPlacingBreads = true;
+
         for (int i = 0; i < stallPlane.childCount && _stackedBreads.Count > 0; i++)
         {
             Transform stallPos = stallPlane.GetChild(i);
@@ -118,6 +120,8 @@ public class PlayerInteraction : MonoBehaviour
             }
         }
 
+        _isPlacingBreads = false;
+
         if (_stackedBreads.Count == 0)
         {
             UpdateAnimatorState();
@@ -130,14 +134,13 @@ public class PlayerInteraction : MonoBehaviour
         {
             Transform stallPos = stallPlane.GetChild(i);
 
-            // 자식이 없거나 자식 빵이 비활성화 상태인 경우 Stall이 가득 차지 않음
             if (stallPos.childCount == 0 || !stallPos.GetChild(0).gameObject.activeSelf)
             {
                 return false;
             }
         }
 
-        return true; // 모든 자리가 가득 참
+        return true;
     }
 
     public void RemoveBreadFromStack()
