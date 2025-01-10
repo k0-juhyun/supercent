@@ -402,7 +402,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _joystickPrefab: {fileID: 4726072827750340918, guid: bc241dab2bf075642a62e58d224b8dc6, type: 3}
   _touchPointPrefab: {fileID: 6032896584861711562, guid: a1943fea036b87a4199aa5616aab33a1, type: 3}
-  _player: {fileID: 1081303225}
+  _playerAnimator: {fileID: 1081303225}
   _playerInteraction: {fileID: 1081303230}
   _joystickRadius: 250
   _knobMoveDuration: 0.2

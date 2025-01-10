@@ -6,7 +6,7 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 {
     public GameObject _joystickPrefab;
     public GameObject _touchPointPrefab;
-    public Animator _player;
+    public Animator _playerAnimator;
     public PlayerInteraction _playerInteraction;
 
     private GameObject _joystickInstance;
@@ -14,22 +14,11 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     private RectTransform _joystickBase;
     private RectTransform _joystickKnob;
 
-    private string _currentAnimationState;
+    private Vector2 _inputDirection;
     public float _joystickRadius = 100f;
     public float _knobMoveDuration = 0.2f;
-    private Vector2 _inputDirection;
 
     public Vector2 InputDirection => _inputDirection;
-
-    private void Start()
-    {
-        _playerInteraction.OnBreadStateChanged += HandleBreadStateChange;
-    }
-
-    private void OnDestroy()
-    {
-        _playerInteraction.OnBreadStateChanged -= HandleBreadStateChange;
-    }
 
     public void OnPointerDown(PointerEventData eventData)
     {
@@ -116,23 +105,6 @@ public class JoystickManager : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     private void UpdateMoveAnimation(bool isMoving)
     {
-        string targetState = isMoving
-            ? (_playerInteraction._stackedBreads.Count > 0 ? "Stack_Move" : "Default_Move")
-            : (_playerInteraction._stackedBreads.Count > 0 ? "Stack_Idle" : "Default_Idle");
-
-        if (_currentAnimationState == targetState) return;
-        _currentAnimationState = targetState;
-
-        _player.SetTrigger(targetState);
-    }
-
-    private void HandleBreadStateChange(bool hasBread)
-    {
-        string targetState = hasBread ? "Stack_Idle" : "Default_Idle";
-
-        if (_currentAnimationState == targetState) return;
-        _currentAnimationState = targetState;
-
-        _player.SetTrigger(targetState);
+        _playerAnimator.SetBool("IsMoving", isMoving);
     }
 }

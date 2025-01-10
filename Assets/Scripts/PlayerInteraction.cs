@@ -36,6 +36,12 @@ public class PlayerInteraction : MonoBehaviour
         }
         else if (other.CompareTag("StallPlane"))
         {
+            if (IsStallFull(other.transform))
+            {
+                Debug.LogWarning("Stall is full. Cannot place more bread.");
+                return; // Stall이 가득 찬 경우 배치 중단
+            }
+
             StartCoroutine(PlaceBreadInStall(other.transform));
         }
     }
@@ -76,6 +82,7 @@ public class PlayerInteraction : MonoBehaviour
                     isBreadAddedToStack = true;
 
                     OnBreadStateChanged?.Invoke(_stackedBreads.Count > 0);
+                    UpdateAnimatorState();
                 });
 
             yield return new WaitUntil(() => isBreadAddedToStack);
@@ -88,9 +95,9 @@ public class PlayerInteraction : MonoBehaviour
         for (int i = 0; i < stallPlane.childCount && _stackedBreads.Count > 0; i++)
         {
             Transform stallPos = stallPlane.GetChild(i);
-            GameObject stallBread = stallPos.GetChild(0).gameObject;
+            GameObject stallBread = stallPos.childCount > 0 ? stallPos.GetChild(0).gameObject : null;
 
-            if (!stallBread.activeSelf)
+            if (stallBread != null && !stallBread.activeSelf)
             {
                 GameObject stackBread = _stackedBreads.Pop();
                 stackBread.SetActive(false);
@@ -104,10 +111,50 @@ public class PlayerInteraction : MonoBehaviour
                     .OnComplete(() =>
                     {
                         OnBreadStateChanged?.Invoke(_stackedBreads.Count > 0);
+                        UpdateAnimatorState();
                     });
 
                 yield return new WaitForSeconds(0.1f);
             }
         }
+
+        if (_stackedBreads.Count == 0)
+        {
+            UpdateAnimatorState();
+        }
+    }
+
+    private bool IsStallFull(Transform stallPlane)
+    {
+        for (int i = 0; i < stallPlane.childCount; i++)
+        {
+            Transform stallPos = stallPlane.GetChild(i);
+
+            // 자식이 없거나 자식 빵이 비활성화 상태인 경우 Stall이 가득 차지 않음
+            if (stallPos.childCount == 0 || !stallPos.GetChild(0).gameObject.activeSelf)
+            {
+                return false;
+            }
+        }
+
+        return true; // 모든 자리가 가득 참
+    }
+
+    public void RemoveBreadFromStack()
+    {
+        if (_stackedBreads.Count > 0)
+        {
+            GameObject bread = _stackedBreads.Pop();
+            bread.SetActive(false);
+
+            OnBreadStateChanged?.Invoke(_stackedBreads.Count > 0);
+            UpdateAnimatorState();
+        }
+    }
+
+    private void UpdateAnimatorState()
+    {
+        bool hasBread = _stackedBreads.Count > 0;
+        _playerAnimator.SetBool("HasBread", hasBread);
     }
 }
