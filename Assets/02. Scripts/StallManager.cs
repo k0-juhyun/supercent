@@ -4,6 +4,8 @@ using UnityEngine;
 public class StallManager : MonoBehaviour
 {
     private Dictionary<Transform, bool> _stallBreadStatus = new Dictionary<Transform, bool>();
+    private Queue<System.Action> _requestQueue = new Queue<System.Action>();
+    private bool _isProcessingRequest = false;
 
     private void Awake()
     {
@@ -15,6 +17,27 @@ public class StallManager : MonoBehaviour
                 _stallBreadStatus[bread] = false; // 초기에는 모두 점유되지 않음
             }
         }
+    }
+
+    public void RequestBreadCollection(System.Action onRequestProcessed)
+    {
+        _requestQueue.Enqueue(onRequestProcessed);
+        ProcessNextRequest();
+    }
+
+    private void ProcessNextRequest()
+    {
+        if (_isProcessingRequest || _requestQueue.Count == 0) return;
+
+        _isProcessingRequest = true;
+
+        // 큐에서 요청 처리
+        System.Action currentRequest = _requestQueue.Dequeue();
+        currentRequest?.Invoke();
+
+        // 요청 완료 후 다음 요청 처리
+        _isProcessingRequest = false;
+        ProcessNextRequest();
     }
 
     public GameObject GetAvailableBread()

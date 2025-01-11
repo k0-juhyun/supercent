@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using System.Data.Common;
 
 public class CustomerManager : MonoBehaviour
 {
@@ -9,11 +10,13 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private Transform _customerSpawnPoint;
     [SerializeField] private Transform[] _wayPoints;
     [SerializeField] private Transform[] _wayPoint2SubPoints;
-    [SerializeField] private Transform[] _wayPoint4SubPoints;
+    [SerializeField] private Transform _outPoints;
+    [SerializeField] private Transform _waitingPoints;
     [SerializeField] private Transform _table;
     [SerializeField] private Transform _stallPlane; // StallPlane 추가
 
     private Queue<GameObject> _customerPool = new Queue<GameObject>();
+    private Queue<GameObject> _tableQueue = new Queue<GameObject>(); // 테이블 대기열
     private Dictionary<Transform, bool> _wayPoint2Occupancy = new Dictionary<Transform, bool>();
     private Dictionary<Transform, bool> _wayPoint4Occupancy = new Dictionary<Transform, bool>();
     private bool _isTableOccupied = false;
@@ -25,11 +28,6 @@ public class CustomerManager : MonoBehaviour
         foreach (Transform subPoint in _wayPoint2SubPoints)
         {
             _wayPoint2Occupancy[subPoint] = false;
-        }
-
-        foreach (Transform subPoint in _wayPoint4SubPoints)
-        {
-            _wayPoint4Occupancy[subPoint] = false;
         }
 
         InitializeCustomerPool(10);
@@ -91,7 +89,7 @@ public class CustomerManager : MonoBehaviour
                 TraverseWayPoint2(customer, subPoint, () =>
                 {
                     Debug.Log("가판대 도착");
-                    StartCoroutine(HandleBreadCollection(customer, _stallPlane)); // StallPlane 전달
+                    StartCoroutine(HandleBreadCollection(customer, _stallPlane, subPoint));
                 });
                 return;
             }
@@ -113,11 +111,9 @@ public class CustomerManager : MonoBehaviour
 
         StartCoroutine(FollowPath(customer, path, () =>
         {
-            StartCoroutine(HandleBreadCollection(customer, targetSubPoint));
             onComplete?.Invoke();
         }));
     }
-
 
     private IEnumerator FollowPath(GameObject customer, List<Transform> path, System.Action onComplete)
     {
@@ -132,10 +128,10 @@ public class CustomerManager : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    private IEnumerator HandleBreadCollection(GameObject customer, Transform subPoint)
+    private IEnumerator HandleBreadCollection(GameObject customer, Transform stallPlane, Transform subPoint)
     {
         Customer customerScript = customer.GetComponent<Customer>();
-        StallManager stallManager = _stallPlane.GetComponent<StallManager>();
+        StallManager stallManager = stallPlane.GetComponent<StallManager>();
 
         if (stallManager == null)
         {
@@ -143,81 +139,116 @@ public class CustomerManager : MonoBehaviour
             yield break;
         }
 
-        // 빵 수집 로직
-        yield return StartCoroutine(customerScript.StartCollectingCoroutine(stallManager));
-
-        // 점유 상태 해제
-        _wayPoint2Occupancy[subPoint] = false;
-
-        // 다음 단계로 진행
-        DecideCustomerType(customer);
+        // StallPlane의 Transform도 함께 전달
+        yield return StartCoroutine(customerScript.StartCollectingCoroutine(stallManager, stallPlane, () =>
+        {
+            _wayPoint2Occupancy[subPoint] = false;
+            DecideCustomerType(customer);
+        }));
     }
-
 
     private void DecideCustomerType(GameObject customer)
     {
-        if (!_isTableOccupied && Random.value > 0.5f)
+        Customer customerScript = customer.GetComponent<Customer>();
+
+        if (!_isTableOccupied && Random.value > 0.9f)
         {
+            Debug.Log("먹고감");
             AssignTable(customer);
+
+            // 결제 완료 후 AssignTable을 다시 호출
+            customerScript.OnPaymentCompleted += () =>
+            {
+                AssignTable(customer);
+            };
         }
         else
         {
+            Debug.Log("포장");
             AssignWayPoint4(customer);
+
+            // 결제 완료 후 AssignWayPoint4를 다시 호출
+            customerScript.OnPaymentCompleted += () =>
+            {
+                AssignWayPoint4(customer);
+            };
         }
     }
 
     private void AssignWayPoint4(GameObject customer)
     {
         Customer customerScript = customer.GetComponent<Customer>();
+
+        // WayPoint4 도착 후 결제 여부에 따라 동작
         customerScript.MoveTo(_wayPoints[3], () =>
         {
-            TraverseWayPoint4(customer);
-        });
-    }
-
-    private void TraverseWayPoint4(GameObject customer)
-    {
-        Customer customerScript = customer.GetComponent<Customer>();
-
-        foreach (var subPoint in _wayPoint4SubPoints)
-        {
-            if (!_wayPoint4Occupancy[subPoint])
+            Debug.Log("손님 WayPoint4 도착");
+            if (customerScript.IsPaid)
             {
-                _wayPoint4Occupancy[subPoint] = true;
-
-                customerScript.MoveTo(subPoint, () =>
+                Debug.Log("손님 결제 완료. 집으로 갑시다");
+                customerScript.MoveTo(_outPoints, () =>
                 {
-                    _wayPoint4Occupancy[subPoint] = false;
                     ReturnCustomerToPool(customer);
                 });
-
-                return;
             }
-        }
-
-        Debug.Log("모든 WayPoint4 하위 포인트가 가득 찼습니다.");
+            else
+            {
+                Debug.Log("손님 결제 미완료. 대기 상태 유지");
+            }
+        });
     }
 
     private void AssignTable(GameObject customer)
     {
+        Customer customerScript = customer.GetComponent<Customer>();
+
         if (!_isTableOccupied)
         {
-            _isTableOccupied = true;
-
-            Customer customerScript = customer.GetComponent<Customer>();
-            customerScript.MoveTo(_wayPoints[3], () =>
+            customerScript.MoveTo(_wayPoints[4], () =>
             {
                 customerScript.MoveTo(_table, () =>
                 {
-                    _isTableOccupied = false;
-                    ReturnCustomerToPool(customer);
+                    _isTableOccupied = true;
+
+                    if (_tableQueue.Count > 0)
+                    {
+                        GameObject nextCustomer = _tableQueue.Dequeue();
+                        AssignTable(nextCustomer); // 대기열의 다음 고객 처리
+                    }
+                    else
+                    {
+                        ReturnCustomerToPool(customer);
+                    }
                 });
             });
         }
         else
         {
-            Debug.Log("테이블이 가득 찼습니다.");
+            Debug.Log("테이블이 가득 찼습니다. 줄을 섭니다.");
+            _tableQueue.Enqueue(customer);
+            ArrangeTableQueue(); // 대기열 정리
         }
+    }
+
+    private void ArrangeTableQueue()
+    {
+        int i = 0;
+        foreach (GameObject queuedCustomer in _tableQueue)
+        {
+            Customer customerScript = queuedCustomer.GetComponent<Customer>();
+            Vector3 queuePosition = _waitingPoints.transform.position;
+            Transform tempTransform = CreateTemporaryTransform(queuePosition);
+
+            customerScript.MoveTo(tempTransform, null); // 줄 위치로 이동
+            i++;
+        }
+    }
+
+    private Transform CreateTemporaryTransform(Vector3 position)
+    {
+        GameObject tempObject = new GameObject("TempTableQueuePosition");
+        tempObject.transform.position = position;
+        return tempObject.transform;
     }
 
     private void ReturnCustomerToPool(GameObject customer)

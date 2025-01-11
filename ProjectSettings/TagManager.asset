@@ -8,6 +8,11 @@ TagManager:
   - Oven
   - Bread
   - StallPlane
+  - POS
+  - Customer
+  - MoneyStack
+  - Locked
+  - Left
   layers:
   - Default
   - TransparentFX

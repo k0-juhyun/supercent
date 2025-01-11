@@ -17,6 +17,7 @@ public class PlayerInteraction : MonoBehaviour
     private bool _isPlacingBreads = false; // 빵 배치 중인지 여부
 
     public event System.Action<bool> OnBreadStateChanged;
+    public bool _isPosFlag = false;
 
     private void Awake()
     {
@@ -39,6 +40,10 @@ public class PlayerInteraction : MonoBehaviour
             {
                 StartCoroutine(PlaceBreadInStall(other.transform));
             }
+        }
+        else if(other.CompareTag("POS"))
+        {
+            _isPosFlag = true;
         }
     }
 
@@ -68,6 +73,7 @@ public class PlayerInteraction : MonoBehaviour
             Transform targetPosition = _stackPositions[_stackedBreads.Count];
             GameObject stackBread = targetPosition.GetChild(0).gameObject;
 
+            // 스택 추가 완료 기다리기
             bool isBreadAddedToStack = false;
             bread.transform
                 .DOMove(targetPosition.position, 0.5f)
